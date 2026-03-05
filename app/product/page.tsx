@@ -8,35 +8,33 @@ import { Badge } from '@/components/ui/badge';
 import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
+import products from '@/sample-products.json';
 
 interface Product {
   stacklineSku: string;
   title: string;
   categoryName: string;
   subCategoryName: string;
-  imageUrls: string[];
-  featureBullets: string[];
+  imageUrls?: string[];
+  featureBullets?: string[];
   retailerSku: string;
+  retailPrice: number;
 }
 
 export default function ProductPage() {
   const searchParams = useSearchParams();
-  const productParam = searchParams.get('product');
+  const sku = searchParams.get('sku');
   const [product, setProduct] = useState<Product | null>(null);
   const [selectedImage, setSelectedImage] = useState(0);
 
   useEffect(() => {
-    if (productParam) {
-      try {
-        const parsedProduct = JSON.parse(productParam);
-        setProduct(parsedProduct);
-      } catch (error) {
-        console.error('Failed to parse product data:', error);
-      }
+    if (sku) {
+      const foundProduct = products.find((p) => p.stacklineSku === sku);
+      setProduct(foundProduct || null);
     }
-  }, [productParam]);
+  }, [sku]);
 
-  if (!product) {
+  if (!sku || !product) {
     return (
       <div className="min-h-screen bg-background">
         <div className="container mx-auto px-4 py-8">
@@ -69,7 +67,7 @@ export default function ProductPage() {
             <Card className="overflow-hidden">
               <CardContent className="p-0">
                 <div className="relative h-96 w-full bg-muted">
-                  {product.imageUrls[selectedImage] && (
+                  {product.imageUrls && product.imageUrls[selectedImage] && (
                     <Image
                       src={product.imageUrls[selectedImage]}
                       alt={product.title}
@@ -83,7 +81,7 @@ export default function ProductPage() {
               </CardContent>
             </Card>
 
-            {product.imageUrls.length > 1 && (
+            {product.imageUrls && product.imageUrls.length > 1 && (
               <div className="grid grid-cols-4 gap-2">
                 {product.imageUrls.map((url, idx) => (
                   <button
@@ -108,6 +106,9 @@ export default function ProductPage() {
 
           <div className="space-y-6">
             <div>
+              <div className="text-4xl font-bold text-primary mb-4">
+                ${product.retailPrice.toFixed(2)}
+              </div>
               <div className="flex gap-2 mb-2">
                 <Badge variant="secondary">{product.categoryName}</Badge>
                 <Badge variant="outline">{product.subCategoryName}</Badge>
@@ -116,7 +117,7 @@ export default function ProductPage() {
               <p className="text-sm text-muted-foreground">SKU: {product.retailerSku}</p>
             </div>
 
-            {product.featureBullets.length > 0 && (
+            {product.featureBullets && product.featureBullets.length > 0 && (
               <Card>
                 <CardContent className="pt-6">
                   <h2 className="text-lg font-semibold mb-3">Features</h2>

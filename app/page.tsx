@@ -28,7 +28,8 @@ interface Product {
   title: string;
   categoryName: string;
   subCategoryName: string;
-  imageUrls: string[];
+  imageUrls?: string[];
+  retailPrice: number;
 }
 
 export default function Home() {
@@ -36,13 +37,12 @@ export default function Home() {
   const [categories, setCategories] = useState<string[]>([]);
   const [subCategories, setSubCategories] = useState<string[]>([]);
   const [search, setSearch] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState<string | undefined>(
-    undefined
-  );
-  const [selectedSubCategory, setSelectedSubCategory] = useState<
-    string | undefined
-  >(undefined);
+  const [selectedCategory, setSelectedCategory] = useState<string>("");
+  const [selectedSubCategory, setSelectedSubCategory] = useState<string>("");
   const [loading, setLoading] = useState(true);
+  const [offset, setOffset] = useState(0);
+  const [total, setTotal] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   useEffect(() => {
     fetch("/api/categories")
@@ -51,31 +51,53 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    if (selectedCategory) {
-      fetch(`/api/subcategories`)
+    if (selectedCategory !== "") {
+      fetch(`/api/subcategories?category=${encodeURIComponent(selectedCategory)}`)
         .then((res) => res.json())
         .then((data) => setSubCategories(data.subCategories));
     } else {
       setSubCategories([]);
-      setSelectedSubCategory(undefined);
+      setSelectedSubCategory("");
     }
   }, [selectedCategory]);
 
   useEffect(() => {
     setLoading(true);
+    setOffset(0);
     const params = new URLSearchParams();
     if (search) params.append("search", search);
-    if (selectedCategory) params.append("category", selectedCategory);
-    if (selectedSubCategory) params.append("subCategory", selectedSubCategory);
+    if (selectedCategory !== "") params.append("category", selectedCategory);
+    if (selectedSubCategory !== "") params.append("subCategory", selectedSubCategory);
     params.append("limit", "20");
+    params.append("offset", "0");
 
     fetch(`/api/products?${params}`)
       .then((res) => res.json())
       .then((data) => {
         setProducts(data.products);
+        setTotal(data.total || 0);
         setLoading(false);
       });
   }, [search, selectedCategory, selectedSubCategory]);
+
+  const loadMore = () => {
+    setLoadingMore(true);
+    const newOffset = offset + 20;
+    const params = new URLSearchParams();
+    if (search) params.append("search", search);
+    if (selectedCategory !== "") params.append("category", selectedCategory);
+    if (selectedSubCategory !== "") params.append("subCategory", selectedSubCategory);
+    params.append("limit", "20");
+    params.append("offset", newOffset.toString());
+
+    fetch(`/api/products?${params}`)
+      .then((res) => res.json())
+      .then((data) => {
+        setProducts((prev) => [...prev, ...data.products]);
+        setOffset(newOffset);
+        setLoadingMore(false);
+      });
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -96,7 +118,7 @@ export default function Home() {
 
             <Select
               value={selectedCategory}
-              onValueChange={(value) => setSelectedCategory(value || undefined)}
+              onValueChange={(value) => setSelectedCategory(value)}
             >
               <SelectTrigger className="w-full md:w-[200px]">
                 <SelectValue placeholder="All Categories" />
@@ -110,12 +132,10 @@ export default function Home() {
               </SelectContent>
             </Select>
 
-            {selectedCategory && subCategories.length > 0 && (
+            {selectedCategory !== "" && subCategories.length > 0 && (
               <Select
                 value={selectedSubCategory}
-                onValueChange={(value) =>
-                  setSelectedSubCategory(value || undefined)
-                }
+                onValueChange={(value) => setSelectedSubCategory(value)}
               >
                 <SelectTrigger className="w-full md:w-[200px]">
                   <SelectValue placeholder="All Subcategories" />
@@ -130,13 +150,13 @@ export default function Home() {
               </Select>
             )}
 
-            {(search || selectedCategory || selectedSubCategory) && (
+            {(search || selectedCategory !== "" || selectedSubCategory !== "") && (
               <Button
                 variant="outline"
                 onClick={() => {
                   setSearch("");
-                  setSelectedCategory(undefined);
-                  setSelectedSubCategory(undefined);
+                  setSelectedCategory("");
+                  setSelectedSubCategory("");
                 }}
               >
                 Clear Filters
@@ -158,21 +178,18 @@ export default function Home() {
         ) : (
           <>
             <p className="text-sm text-muted-foreground mb-4">
-              Showing {products.length} products
+              Showing {products.length} of {total} products
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
               {products.map((product) => (
                 <Link
                   key={product.stacklineSku}
-                  href={{
-                    pathname: "/product",
-                    query: { product: JSON.stringify(product) },
-                  }}
+                  href={`/product?sku=${product.stacklineSku}`}
                 >
                   <Card className="h-full hover:shadow-lg transition-shadow cursor-pointer">
                     <CardHeader className="p-0">
                       <div className="relative h-48 w-full overflow-hidden rounded-t-lg bg-muted">
-                        {product.imageUrls[0] && (
+                        {product.imageUrls?.[0] && (
                           <Image
                             src={product.imageUrls[0]}
                             alt={product.title}
@@ -184,6 +201,9 @@ export default function Home() {
                       </div>
                     </CardHeader>
                     <CardContent className="pt-4">
+                      <div className="text-2xl font-bold text-primary mb-2">
+                        ${product.retailPrice.toFixed(2)}
+                      </div>
                       <CardTitle className="text-base line-clamp-2 mb-2">
                         {product.title}
                       </CardTitle>
@@ -205,6 +225,18 @@ export default function Home() {
                 </Link>
               ))}
             </div>
+            
+            {products.length < total && (
+              <div className="flex justify-center mt-8">
+                <Button
+                  onClick={loadMore}
+                  disabled={loadingMore}
+                  size="lg"
+                >
+                  {loadingMore ? "Loading..." : "Load More"}
+                </Button>
+              </div>
+            )}
           </>
         )}
       </main>
